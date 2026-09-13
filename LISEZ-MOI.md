@@ -24,12 +24,29 @@ Cette adresse est celle à ouvrir sur les téléphones et tablettes.
 
 ## 2. Installer sur l'écran d'accueil
 
+**Installez depuis Chrome, pas depuis un autre navigateur.** Firefox, DuckDuckGo, Brave et
+consorts créent un simple raccourci : pas d'icône dédiée, pas de plein écran, pas de mode hors
+ligne. Seuls Chrome (Android) et Safari (iPhone) lisent le manifeste.
+
 **Android (Chrome)** : ouvrir l'adresse, puis soit le bouton *Installer sur l'écran d'accueil*
 en bas de l'écran d'accueil du jeu, soit le menu ⋮ → *Ajouter à l'écran d'accueil*.
 
 **iPhone / iPad (Safari)** : bouton Partager → *Sur l'écran d'accueil*.
 
 L'application s'ouvre ensuite en plein écran, avec son icône, et fonctionne sans connexion.
+
+### Si l'icône n'apparaît pas
+
+Vérifiez que les fichiers sont bien en ligne en ouvrant ces deux adresses dans le navigateur :
+
+- `https://<votre-compte>.github.io/multiplication/manifest.webmanifest` → doit afficher du texte
+- `https://<votre-compte>.github.io/multiplication/icone-192.png` → doit afficher l'icône
+
+Une erreur 404 signifie que le fichier n'a pas été déposé sur le dépôt, ou qu'il se trouve dans
+un sous-dossier au lieu de la racine. Tous les fichiers doivent être côte à côte, à la racine.
+
+Après correction, supprimez le raccourci de l'écran d'accueil et réinstallez : Android garde
+l'ancienne icône en mémoire.
 
 ## 3. Où vont les scores
 

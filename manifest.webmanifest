@@ -1,6 +1,6 @@
 {
   "name": "Multiplication & Cie",
-  "short_name": "Multiplication",
+  "short_name": "Multiplication & Cie",
   "description": "Jeu des tables de multiplication : chaque résultat trouvé rapporte autant de points, 1000 points par palier.",
   "lang": "fr",
   "start_url": "./index.html",
