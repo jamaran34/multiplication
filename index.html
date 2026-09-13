@@ -1,0 +1,868 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Multiplication &amp; Cie</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#17323B">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Multiplication &amp; Cie">
+<meta name="description" content="Jeu des tables de multiplication : chaque résultat trouvé rapporte autant de points, 1000 points par palier.">
+<link rel="icon" href="icone-192.png">
+<link rel="apple-touch-icon" href="icone-apple-180.png">
+<style>
+  :root{
+    --encre:#17323B;
+    --papier:#EFF3F1;
+    --carte:#FFFFFF;
+    --trait:#CFDAD6;
+    --trait-fort:#9FB2AD;
+    --or:#C98A16;
+    --juste:#3FA34D;
+    --faux:#C4453C;
+    --t1:#E23D3D; --t2:#3FA34D; --t3:#DE7CA0; --t4:#EFB61F; --t5:#4FA8D8;
+    --t6:#7E5AA8; --t7:#8E979C; --t8:#8C5A3C; --t9:#22508F; --t10:#C98A16;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--papier);
+    color:var(--encre);
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-text-size-adjust:100%;
+  }
+  .app{max-width:460px;margin:0 auto;padding:18px 16px 40px}
+  h1{
+    font-family:Georgia,"Iowan Old Style","Times New Roman",serif;
+    font-size:30px;line-height:1.1;font-weight:700;margin:6px 0 2px;letter-spacing:-.01em;
+  }
+  h2{font-family:Georgia,serif;font-size:21px;margin:0 0 4px;font-weight:700}
+  p.sous{margin:0 0 22px;color:#5C7178;font-size:14px}
+  .ecran{display:none}
+  .ecran.actif{display:block}
+
+  button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
+  button:focus-visible,input:focus-visible{outline:3px solid var(--or);outline-offset:2px}
+
+  .carte{
+    background:var(--carte);border:1px solid var(--trait);
+    border-radius:14px;padding:14px 16px;margin-bottom:12px;width:100%;text-align:left;
+    display:block;
+  }
+  .joueur-ligne{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .joueur-ligne .nom{font-family:Georgia,serif;font-size:20px}
+  .joueur-ligne .avance{font-size:13px;color:#5C7178;margin-top:2px}
+  .puces{display:flex;gap:4px;margin-top:8px}
+  .puce{height:6px;border-radius:3px;background:var(--trait);flex:1;overflow:hidden}
+  .puce i{display:block;height:100%;background:var(--or)}
+
+  .champ{display:flex;gap:8px;margin:4px 0 0}
+  input[type=text]{
+    flex:1;font:inherit;padding:12px 14px;border:1px solid var(--trait-fort);
+    border-radius:12px;background:var(--carte);color:inherit;min-width:0;
+  }
+  .btn{
+    background:var(--encre);color:#fff;padding:12px 18px;border-radius:12px;
+    font-weight:600;text-align:center;
+  }
+  .btn.pale{background:transparent;color:var(--encre);border:1px solid var(--trait-fort)}
+  .btn.large{display:block;width:100%;margin-top:8px}
+  .lien{color:#5C7178;font-size:13px;text-decoration:underline;padding:6px 0}
+
+  /* paliers */
+  .palier{position:relative;overflow:hidden}
+  .palier .titre{font-family:Georgia,serif;font-size:19px}
+  .palier .detail{font-size:13px;color:#5C7178;margin-top:2px}
+  .jauge{height:10px;background:#E4EAE7;border-radius:5px;margin-top:12px;overflow:hidden}
+  .jauge i{display:block;height:100%;background:var(--or);transition:width .5s ease}
+  .chiffres{display:flex;justify-content:space-between;font-size:13px;margin-top:6px;color:#5C7178}
+  .chiffres b{color:var(--encre);font-variant-numeric:tabular-nums}
+  .fini .jauge i{background:var(--juste)}
+  .sceau{
+    display:inline-block;margin-top:10px;font-size:12px;font-weight:600;color:var(--juste);
+    border:1px solid var(--juste);border-radius:999px;padding:3px 10px;
+  }
+
+  /* jeu */
+  .barre-haut{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .barre-haut .quitter{font-size:14px;color:#5C7178}
+  .compteur{font-size:13px;color:#5C7178;font-variant-numeric:tabular-nums}
+  .calcul{
+    background:var(--carte);border:1px solid var(--trait);border-radius:18px;
+    padding:22px 16px 18px;text-align:center;
+  }
+  .pied{margin-top:26px;font-size:13px;color:#5C7178}
+  .log{background:var(--carte);border:1px solid var(--trait);border-radius:14px;padding:4px 16px}
+  .log-ligne{display:flex;align-items:baseline;gap:12px;padding:12px 0;border-top:1px solid var(--trait)}
+  .log-ligne:first-child{border-top:none}
+  .log-pts{
+    font-family:Georgia,serif;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;
+    min-width:74px;text-align:right;
+  }
+  .log-pts.perte{color:var(--faux)}
+  .log-detail{flex:1;font-size:13px;color:#5C7178;line-height:1.45}
+  .log-detail b{color:var(--encre);font-weight:600;display:block;font-size:14px}
+  .flamme{color:var(--faux);font-weight:600}
+  .resume{display:flex;gap:14px;margin-bottom:14px}
+  .resume div{flex:1;background:var(--carte);border:1px solid var(--trait);border-radius:12px;padding:10px 12px}
+  .resume .val{font-family:Georgia,serif;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+  .resume .lab{font-size:12px;color:#5C7178}
+  .inter{
+    width:48px;height:28px;border-radius:14px;background:var(--trait);
+    position:relative;flex:none;transition:background .2s;display:block;
+  }
+  .inter i{
+    position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .2s;
+  }
+  [aria-pressed="true"] .inter{background:var(--faux)}
+  [aria-pressed="true"] .inter i{transform:translateX(20px)}
+  body.kamikaze .calcul{border-color:var(--faux);border-width:2px}
+  body.kamikaze .clavier .valider{background:var(--faux);border-color:var(--faux)}
+  .etiquette{
+    height:18px;font-size:12px;font-weight:600;color:var(--or);margin-bottom:8px;
+  }
+  .a-revoir{color:var(--or);font-weight:600}
+  .operation{
+    font-family:Georgia,serif;font-size:44px;line-height:1;font-weight:700;
+    font-variant-numeric:tabular-nums;letter-spacing:.01em;
+  }
+  .reponse{
+    margin-top:14px;height:56px;border-bottom:3px solid var(--trait-fort);
+    font-family:Georgia,serif;font-size:40px;line-height:56px;font-variant-numeric:tabular-nums;
+    color:var(--encre);
+  }
+  .reponse.vide{color:#B7C4C1}
+  .verdict{height:22px;margin-top:8px;font-size:14px;font-weight:600}
+  .verdict.ok{color:var(--juste)}
+  .verdict.ko{color:var(--faux)}
+  .secousse{animation:sec .3s}
+  @keyframes sec{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+  .clavier{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+  .clavier button{
+    background:var(--carte);border:1px solid var(--trait);border-radius:12px;
+    padding:16px 0;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;
+  }
+  .clavier button:active{background:#E4EAE7}
+  .clavier .valider{background:var(--encre);color:#fff;border-color:var(--encre)}
+
+  /* table de Pythagore */
+  .grille{margin-top:18px}
+  .grille h3{font-size:13px;font-weight:600;color:#5C7178;margin:0 0 8px}
+  .pythagore{display:grid;gap:3px}
+  .case{
+    aspect-ratio:1;border-radius:4px;background:#E4EAE7;
+    transition:background .35s ease,transform .35s ease;
+  }
+  .case.acquis{background:var(--c,#C98A16)}
+  .case.neuf{transform:scale(1.25)}
+
+  /* bilan */
+  .bilan{background:var(--carte);border:1px solid var(--trait);border-radius:18px;padding:22px 18px;text-align:center}
+  .gros{font-family:Georgia,serif;font-size:52px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .gros small{font-size:16px;font-weight:400;display:block;color:#5C7178;margin-top:4px}
+  .liste-erreurs{margin-top:16px;text-align:left;font-size:14px;color:#5C7178}
+  .liste-erreurs span{display:inline-block;margin:0 10px 6px 0;font-variant-numeric:tabular-nums}
+  .alerte{background:#FBF0E3;border:1px solid #E4C79A;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="app">
+
+  <!-- 1. joueurs -->
+  <section id="ecran-joueurs" class="ecran actif">
+    <h1>Multiplication &amp; Cie</h1>
+    <p class="sous">Chaque multiplication trouvée rapporte autant de points que son résultat. Il en faut 1000 par palier.</p>
+    <div id="alerte-sauvegarde"></div>
+    <div id="liste-joueurs"></div>
+    <div class="carte">
+      <h2>Nouveau joueur</h2>
+      <div class="champ">
+        <input type="text" id="nouveau-nom" maxlength="14" placeholder="Prénom" autocomplete="off">
+        <button class="btn" id="ajouter-joueur">Ajouter</button>
+      </div>
+    </div>
+    <div class="pied">
+      <button class="btn large" id="installer" style="display:none">Installer sur l'écran d'accueil</button>
+      <div id="info-stockage">—</div>
+      <div id="info-fichier" style="margin-top:6px">Aucun fichier de scores lié.</div>
+      <button class="btn pale large" id="lier-fichier">Lier un fichier de scores</button>
+      <div class="champ" style="margin-top:8px">
+        <button class="btn pale" id="exporter" style="flex:1">Exporter</button>
+        <button class="btn pale" id="importer" style="flex:1">Importer</button>
+      </div>
+      <input type="file" id="fichier-import" accept="application/json,.json" style="display:none">
+    </div>
+  </section>
+
+  <!-- 2. paliers -->
+  <section id="ecran-paliers" class="ecran">
+    <div class="barre-haut">
+      <h1 id="titre-joueur">—</h1>
+      <button class="quitter" id="changer-joueur">Changer</button>
+    </div>
+    <p class="sous">Choisis ton palier. La partie reprend là où tu t'es arrêté.</p>
+    <button class="carte" id="bascule-mode" aria-pressed="false">
+      <div class="joueur-ligne">
+        <div>
+          <div class="titre">Mode kamikaze</div>
+          <div class="detail">Une erreur retire le résultat de tes points</div>
+        </div>
+        <span class="inter"><i></i></span>
+      </div>
+    </button>
+    <div id="liste-paliers"></div>
+    <button class="lien" id="voir-journal">Historique des sessions</button><br>
+    <button class="lien" id="effacer-joueur">Effacer ce joueur et ses scores</button>
+  </section>
+
+  <!-- 5. journal -->
+  <section id="ecran-journal" class="ecran">
+    <div class="barre-haut">
+      <button class="quitter" id="retour-depuis-journal">← Retour</button>
+      <span class="compteur" id="journal-nb"></span>
+    </div>
+    <h1>Historique</h1>
+    <p class="sous" id="journal-sous">—</p>
+    <div class="resume" id="journal-resume"></div>
+    <div class="log" id="journal-liste"></div>
+  </section>
+
+  <!-- 3. jeu -->
+  <section id="ecran-jeu" class="ecran">
+    <div class="barre-haut">
+      <button class="quitter" id="quitter-serie">← Arrêter</button>
+      <span class="compteur" id="compteur">—</span>
+    </div>
+    <div class="calcul" id="bloc-calcul">
+      <div class="etiquette" id="etiquette"></div>
+      <div class="operation" id="operation">—</div>
+      <div class="reponse vide" id="reponse">?</div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+    <div class="clavier" id="clavier"></div>
+    <div class="grille">
+      <h3 id="titre-grille">Table de Pythagore</h3>
+      <div class="pythagore" id="pythagore"></div>
+    </div>
+  </section>
+
+  <!-- 4. bilan -->
+  <section id="ecran-bilan" class="ecran">
+    <div class="bilan">
+      <h2 id="bilan-titre">Série terminée</h2>
+      <div class="gros" id="bilan-points">0<small>points gagnés</small></div>
+      <div class="jauge" style="margin-top:18px"><i id="bilan-jauge" style="width:0%"></i></div>
+      <div class="chiffres"><span id="bilan-total">0 / 1000</span><span id="bilan-reste"></span></div>
+      <div class="liste-erreurs" id="bilan-erreurs"></div>
+    </div>
+    <button class="btn large" id="rejouer">Nouvelle série</button>
+    <button class="btn pale large" id="retour-paliers">Retour aux paliers</button>
+  </section>
+</div>
+
+<script>
+const PALIERS = [
+  {id:"p1", nom:"Tables de 1 à 5",  detail:"Les petites tables, de 1×1 à 5×10", min:1, max:5},
+  {id:"p2", nom:"Tables de 5 à 10", detail:"Les grandes tables, de 5×1 à 10×10", min:5, max:10},
+  {id:"p3", nom:"Tables de 1 à 10", detail:"Toutes les tables mélangées", min:1, max:10}
+];
+const OBJECTIF = 1000;
+const PAR_SERIE = 10;
+const CLE = "tables:donnees";
+
+let DATA = {joueurs:[], dernier:null};
+let joueur = null;
+let jeu = null;
+
+/* ---------- sauvegarde ----------
+   Trois cas, testés dans cet ordre :
+   1. "claude"     : la page tourne dans un artefact Claude (window.storage)
+   2. "navigateur" : fichier HTML autonome, on utilise le stockage local du navigateur
+   3. "memoire"    : le navigateur bloque tout, on prévient et on propose l'export fichier
+------------------------------------ */
+const STOCKAGE = {mode:"memoire"};
+
+async function initStockage(){
+  if(window.storage && typeof window.storage.set === "function"){
+    try{
+      await window.storage.set(CLE+":test", "1");
+      STOCKAGE.mode = "claude";
+      return;
+    }catch(e){ /* pas disponible, on passe au suivant */ }
+  }
+  try{
+    window.localStorage.setItem(CLE+":test", "1");
+    window.localStorage.removeItem(CLE+":test");
+    STOCKAGE.mode = "navigateur";
+    return;
+  }catch(e){ /* mode privé ou stockage interdit */ }
+  STOCKAGE.mode = "memoire";
+}
+
+async function charger(){
+  let brut = null;
+  if(STOCKAGE.mode === "claude"){
+    try{ const r = await window.storage.get(CLE); brut = r && r.value; }
+    catch(e){ /* première utilisation : rien d'enregistré */ }
+  }else if(STOCKAGE.mode === "navigateur"){
+    try{ brut = window.localStorage.getItem(CLE); }catch(e){}
+  }
+  if(brut){
+    try{ DATA = JSON.parse(brut); }catch(e){}
+  }
+  if(!DATA.joueurs) DATA.joueurs = [];
+}
+
+async function sauver(){
+  const texte = JSON.stringify(DATA);
+  try{
+    if(STOCKAGE.mode === "claude") await window.storage.set(CLE, texte);
+    else if(STOCKAGE.mode === "navigateur") window.localStorage.setItem(CLE, texte);
+    else throw new Error("aucun stockage");
+    majEtatStockage(true);
+  }catch(e){
+    majEtatStockage(false);
+  }
+}
+
+function majEtatStockage(ok){
+  const zone = q("alerte-sauvegarde");
+  if(!zone) return;
+  if(!ok || STOCKAGE.mode === "memoire"){
+    zone.innerHTML = '<div class="alerte">Ce navigateur n\'autorise pas l\'enregistrement '+
+      '(navigation privée ?). Les scores tiendront jusqu\'à la fermeture de la page : '+
+      'pense à utiliser <b>Exporter</b> en bas de l\'écran pour les garder.</div>';
+  }else{
+    zone.innerHTML = "";
+  }
+  const info = q("info-stockage");
+  if(info){
+    info.textContent = STOCKAGE.mode === "claude"
+      ? "Scores enregistrés dans votre compte Claude."
+      : STOCKAGE.mode === "navigateur"
+        ? "Scores enregistrés dans ce navigateur, sur cet appareil."
+        : "Scores non enregistrés — utilisez l'export.";
+  }
+}
+
+/* ---------- fichier de scores automatique ----------
+   Un navigateur ne peut pas écrire tout seul dans un dossier : il faut que le fichier
+   soit désigné une fois par l'utilisateur. Ensuite, l'écriture se fait sans rien demander,
+   à chaque fin de série et à chaque fermeture de la page.
+------------------------------------ */
+const NOM_FICHIER = "multiplication-et-cie-scores.json";
+let handleFichier = null;
+let ecritureEnCours = false;
+
+function fichierPossible(){ return typeof window.showSaveFilePicker === "function"; }
+
+function majInfoFichier(texte){
+  const z = q("info-fichier");
+  if(z) z.textContent = texte;
+}
+
+async function lierFichier(){
+  if(!fichierPossible()){
+    majInfoFichier("Ce navigateur ne permet pas l'enregistrement automatique dans un fichier. " +
+      "Utilisez Exporter (Chrome ou Edge sur ordinateur le permettent).");
+    return;
+  }
+  try{
+    handleFichier = await window.showSaveFilePicker({
+      suggestedName: NOM_FICHIER,
+      types:[{description:"Scores Multiplication & Cie", accept:{"application/json":[".json"]}}]
+    });
+    await ecrireFichier();
+  }catch(e){ /* l'utilisateur a annulé */ }
+}
+
+async function autoriserFichier(){
+  if(!handleFichier || !handleFichier.queryPermission) return !!handleFichier;
+  const opts = {mode:"readwrite"};
+  if(await handleFichier.queryPermission(opts) === "granted") return true;
+  return await handleFichier.requestPermission(opts) === "granted";
+}
+
+async function ecrireFichier(){
+  if(!handleFichier || ecritureEnCours) return;
+  ecritureEnCours = true;
+  try{
+    if(!(await autoriserFichier())) throw new Error("permission refusée");
+    const flux = await handleFichier.createWritable();
+    await flux.write(JSON.stringify(DATA, null, 2));
+    await flux.close();
+    const h = new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+    majInfoFichier("Fichier « " + handleFichier.name + " » — enregistré à " + h);
+  }catch(e){
+    majInfoFichier("Le fichier n'a pas pu être écrit. Les scores restent dans le navigateur.");
+  }finally{
+    ecritureEnCours = false;
+  }
+}
+
+/* ---------- export / import d'une sauvegarde ---------- */
+function exporterScores(){
+  const nom = "multiplication-et-cie-" + new Date().toISOString().slice(0,10) + ".json";
+  const blob = new Blob([JSON.stringify(DATA, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+}
+
+function importerScores(fichier){
+  const lecteur = new FileReader();
+  lecteur.onload = async ()=>{
+    let recu;
+    try{ recu = JSON.parse(lecteur.result); }
+    catch(e){ alert("Ce fichier n'est pas une sauvegarde valide."); return; }
+    if(!recu || !Array.isArray(recu.joueurs)){ alert("Ce fichier n'est pas une sauvegarde valide."); return; }
+    // fusion : un joueur du fichier remplace celui du même nom, les autres s'ajoutent
+    recu.joueurs.forEach(nouveau=>{
+      const i = DATA.joueurs.findIndex(j=> j.nom.toLowerCase() === String(nouveau.nom).toLowerCase());
+      if(i >= 0) DATA.joueurs[i] = nouveau; else DATA.joueurs.push(nouveau);
+    });
+    await sauver();
+    afficherJoueurs();
+    alert("Sauvegarde chargée : " + recu.joueurs.length + " joueur(s).");
+  };
+  lecteur.readAsText(fichier);
+}
+
+/* ---------- helpers ---------- */
+function q(id){ return document.getElementById(id); }
+function ecran(nom){
+  document.querySelectorAll(".ecran").forEach(s=>s.classList.remove("actif"));
+  q(nom).classList.add("actif");
+  window.scrollTo(0,0);
+}
+function nouveauJoueur(nom){
+  const j = {id:"j"+Date.now(), nom:nom, paliers:{}, journal:[]};
+  PALIERS.forEach(p=> j.paliers[p.id] = {points:0, faits:[], series:0, aRevoir:[]});
+  return j;
+}
+function progression(j,p){ return Math.min(j.paliers[p.id].points, OBJECTIF); }
+
+/* ---------- écran joueurs ---------- */
+function afficherJoueurs(){
+  const box = q("liste-joueurs");
+  if(DATA.joueurs.length === 0){
+    box.innerHTML = '<div class="carte" style="color:#5C7178">Aucun joueur pour l\'instant. Ajoute un prénom pour commencer.</div>';
+    return;
+  }
+  box.innerHTML = "";
+  DATA.joueurs.forEach(j=>{
+    const b = document.createElement("button");
+    b.className = "carte";
+    const total = PALIERS.reduce((s,p)=> s + progression(j,p), 0);
+    b.innerHTML =
+      '<div class="joueur-ligne"><div><div class="nom"></div>'+
+      '<div class="avance">'+total+' points sur 3000</div></div><span aria-hidden="true">›</span></div>'+
+      '<div class="puces">'+PALIERS.map(p=>'<div class="puce"><i style="width:'+
+        Math.round(progression(j,p)/OBJECTIF*100)+'%"></i></div>').join("")+'</div>';
+    b.querySelector(".nom").textContent = j.nom;
+    b.onclick = ()=>{ joueur = j; DATA.dernier = j.id; sauver(); afficherPaliers(); ecran("ecran-paliers"); };
+    box.appendChild(b);
+  });
+}
+
+q("ajouter-joueur").onclick = async ()=>{
+  const champ = q("nouveau-nom");
+  const nom = champ.value.trim();
+  if(!nom) { champ.focus(); return; }
+  const j = nouveauJoueur(nom);
+  DATA.joueurs.push(j);
+  champ.value = "";
+  await sauver();
+  afficherJoueurs();
+};
+q("nouveau-nom").addEventListener("keydown", e=>{ if(e.key==="Enter") q("ajouter-joueur").click(); });
+
+/* ---------- écran paliers ---------- */
+function afficherPaliers(){
+  q("titre-joueur").textContent = joueur.nom;
+  q("bascule-mode").setAttribute("aria-pressed", joueur.kamikaze ? "true" : "false");
+  document.body.classList.toggle("kamikaze", !!joueur.kamikaze);
+  const box = q("liste-paliers");
+  box.innerHTML = "";
+  PALIERS.forEach(p=>{
+    const etat = joueur.paliers[p.id];
+    const pts = progression(joueur,p);
+    const fini = pts >= OBJECTIF;
+    const b = document.createElement("button");
+    b.className = "carte palier" + (fini ? " fini" : "");
+    b.innerHTML =
+      '<div class="titre">'+p.nom+'</div><div class="detail">'+p.detail+'</div>'+
+      '<div class="jauge"><i style="width:'+Math.round(pts/OBJECTIF*100)+'%"></i></div>'+
+      '<div class="chiffres"><span><b>'+pts+'</b> / 1000 points</span><span'+
+        ((etat.aRevoir && etat.aRevoir.length) ? ' class="a-revoir">'+etat.aRevoir.length+' à revoir'
+          : '>'+(etat.series ? etat.series+' série'+(etat.series>1?'s':'') : 'jamais joué'))+'</span></div>'+
+      (fini ? '<span class="sceau">Palier réussi</span>' : '');
+    b.onclick = ()=> demarrerSerie(p.id);
+    box.appendChild(b);
+  });
+}
+q("bascule-mode").onclick = async ()=>{
+  joueur.kamikaze = !joueur.kamikaze;
+  q("bascule-mode").setAttribute("aria-pressed", joueur.kamikaze ? "true" : "false");
+  document.body.classList.toggle("kamikaze", !!joueur.kamikaze);
+  await sauver();
+};
+q("changer-joueur").onclick = ()=>{ afficherJoueurs(); ecran("ecran-joueurs"); };
+q("effacer-joueur").onclick = async ()=>{
+  if(!confirm("Effacer "+joueur.nom+" et tous ses points ?")) return;
+  DATA.joueurs = DATA.joueurs.filter(j=>j.id!==joueur.id);
+  joueur = null;
+  await sauver();
+  afficherJoueurs(); ecran("ecran-joueurs");
+};
+
+/* ---------- le jeu ---------- */
+function clefFait(a,b){ return a+"x"+b; }
+
+function tirerQuestion(p, etat, dejaVues){
+  const toutes = [];
+  for(let a=p.min; a<=p.max; a++)
+    for(let b=1; b<=10; b++)
+      toutes.push({a:a,b:b});
+  const restantes = toutes.filter(o=> !dejaVues.has(clefFait(o.a,o.b)));
+  const pool = restantes.length ? restantes : toutes;
+  // on privilégie les multiplications jamais réussies
+  const neuves = pool.filter(o=> !etat.faits.includes(clefFait(o.a,o.b)));
+  const source = (neuves.length && Math.random() < 0.75) ? neuves : pool;
+  return source[Math.floor(Math.random()*source.length)];
+}
+
+function melanger(t){
+  for(let i=t.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [t[i],t[j]] = [t[j],t[i]];
+  }
+  return t;
+}
+
+function demarrerSerie(palierId){
+  const p = PALIERS.find(x=>x.id===palierId);
+  const etat = joueur.paliers[palierId];
+  if(!etat.aRevoir) etat.aRevoir = [];
+  const vues = new Set();
+  const questions = [];
+  // les opérations ratées lors des séries précédentes reviennent en priorité, 3 au maximum
+  etat.aRevoir.slice(0,3).forEach(cle=>{
+    const a = parseInt(cle.split("x")[0],10), b = parseInt(cle.split("x")[1],10);
+    if(a >= p.min && a <= p.max){
+      vues.add(cle);
+      questions.push({a:a, b:b, revue:true});
+    }
+  });
+  while(questions.length < PAR_SERIE){
+    const o = tirerQuestion(p, etat, vues);
+    vues.add(clefFait(o.a,o.b));
+    questions.push(o);
+  }
+  melanger(questions);
+  jeu = {palier:p, etat:etat, questions:questions, index:0, points:0, saisie:"",
+         verrou:false, erreurs:[], rattrapees:[], reprises:{}, kamikaze:!!joueur.kamikaze,
+         depart:Math.min(etat.points, OBJECTIF), debut:Date.now(), justes:0, enregistre:false};
+  document.body.classList.toggle("kamikaze", jeu.kamikaze);
+  construireGrille();
+  afficherQuestion();
+  ecran("ecran-jeu");
+}
+
+function construireGrille(){
+  const p = jeu.palier;
+  const lignes = p.max - p.min + 1;
+  const g = q("pythagore");
+  g.style.gridTemplateColumns = "repeat(10,1fr)";
+  g.innerHTML = "";
+  q("titre-grille").textContent = "Multiplications déjà réussies";
+  for(let a=p.min; a<=p.max; a++){
+    for(let b=1; b<=10; b++){
+      const c = document.createElement("div");
+      c.className = "case";
+      c.id = "case-"+a+"-"+b;
+      c.style.setProperty("--c","var(--t"+a+")");
+      if(jeu.etat.faits.includes(clefFait(a,b))) c.classList.add("acquis");
+      g.appendChild(c);
+    }
+  }
+}
+
+function afficherQuestion(){
+  const o = jeu.questions[jeu.index];
+  q("operation").textContent = o.a + " × " + o.b;
+  q("etiquette").textContent = o.revue ? "À revoir — seconde chance"
+                             : (jeu.kamikaze ? "Mode kamikaze" : "");
+  jeu.saisie = "";
+  majSaisie();
+  q("verdict").textContent = "";
+  q("verdict").className = "verdict";
+  q("compteur").textContent = "Question "+(jeu.index+1)+" / "+jeu.questions.length+
+    " · "+(jeu.points > 0 ? "+" : "")+jeu.points+" pts";
+}
+
+function majSaisie(){
+  const r = q("reponse");
+  r.textContent = jeu.saisie === "" ? "?" : jeu.saisie;
+  r.classList.toggle("vide", jeu.saisie === "");
+}
+
+function taper(t){
+  if(jeu.verrou) return;
+  if(t === "eff"){ jeu.saisie = jeu.saisie.slice(0,-1); majSaisie(); return; }
+  if(t === "ok"){ valider(); return; }
+  if(jeu.saisie.length >= 3) return;
+  if(jeu.saisie === "" && t === "0") return;
+  jeu.saisie += t;
+  majSaisie();
+}
+
+function crediter(n){
+  jeu.etat.points = Math.max(0, jeu.etat.points + n);
+}
+
+function valider(){
+  if(jeu.saisie === "") return;
+  const o = jeu.questions[jeu.index];
+  const bon = o.a * o.b;
+  const rep = parseInt(jeu.saisie,10);
+  const v = q("verdict");
+  jeu.verrou = true;
+  if(rep === bon){
+    jeu.points += bon;
+    jeu.justes++;
+    crediter(bon);
+    v.textContent = "Juste : +" + bon + " points";
+    v.className = "verdict ok";
+    const cle = clefFait(o.a,o.b);
+    if(!jeu.etat.faits.includes(cle)) jeu.etat.faits.push(cle);
+    if(jeu.etat.aRevoir.includes(cle)){
+      jeu.etat.aRevoir = jeu.etat.aRevoir.filter(x=>x!==cle);
+      jeu.rattrapees.push(o.a+" × "+o.b);
+      jeu.erreurs = jeu.erreurs.filter(x=> x.indexOf(o.a+" × "+o.b+" =") !== 0);
+      v.textContent = "Juste, cette fois : +" + bon + " points";
+    }
+    const c = q("case-"+o.a+"-"+o.b);
+    if(c && !c.classList.contains("acquis")){
+      c.classList.add("acquis","neuf");
+      setTimeout(()=>c.classList.remove("neuf"),350);
+    }
+  }else{
+    const cle = clefFait(o.a,o.b);
+    if(jeu.kamikaze){
+      jeu.points -= bon;
+      crediter(-bon);
+      v.textContent = "C'était " + bon + " — tu perds " + bon + " points";
+    }else{
+      v.textContent = "C'était " + bon + " — on la reverra";
+    }
+    v.className = "verdict ko";
+    if(!jeu.erreurs.includes(o.a+" × "+o.b+" = "+bon)) jeu.erreurs.push(o.a+" × "+o.b+" = "+bon);
+    if(!jeu.etat.aRevoir.includes(cle)) jeu.etat.aRevoir.push(cle);
+    // on la repropose un peu plus loin dans la série, deux fois au maximum
+    jeu.reprises[cle] = (jeu.reprises[cle] || 0) + 1;
+    if(jeu.reprises[cle] <= 2){
+      const pos = Math.min(jeu.index + 3, jeu.questions.length);
+      jeu.questions.splice(pos, 0, {a:o.a, b:o.b, revue:true});
+    }
+    q("bloc-calcul").classList.add("secousse");
+    setTimeout(()=>q("bloc-calcul").classList.remove("secousse"),300);
+  }
+  sauver(); // le total du palier est enregistré à chaque question
+  setTimeout(()=>{
+    jeu.verrou = false;
+    jeu.index++;
+    if(jeu.index >= jeu.questions.length) finSerie();
+    else afficherQuestion();
+  }, rep === bon ? 750 : 1500);
+}
+
+function construireClavier(){
+  const k = q("clavier");
+  const touches = ["1","2","3","4","5","6","7","8","9","eff","0","ok"];
+  touches.forEach(t=>{
+    const b = document.createElement("button");
+    if(t === "eff"){ b.textContent = "←"; b.setAttribute("aria-label","Effacer"); }
+    else if(t === "ok"){ b.textContent = "OK"; b.className = "valider"; }
+    else b.textContent = t;
+    b.onclick = ()=>taper(t);
+    k.appendChild(b);
+  });
+}
+document.addEventListener("keydown", e=>{
+  if(!q("ecran-jeu").classList.contains("actif")) return;
+  if(/^[0-9]$/.test(e.key)) taper(e.key);
+  else if(e.key === "Backspace") taper("eff");
+  else if(e.key === "Enter") taper("ok");
+});
+
+/* ---------- journal des sessions ---------- */
+function enregistrerSession(complete){
+  if(!jeu) return;
+  if(jeu.index === 0 && jeu.points === 0) return; // rien de joué, rien à noter
+  if(!joueur.journal) joueur.journal = [];
+  const ligne = {
+    date: new Date().toISOString(),
+    palier: jeu.palier.id,
+    kamikaze: jeu.kamikaze,
+    points: jeu.points,
+    total: Math.min(jeu.etat.points, OBJECTIF),
+    questions: jeu.index,
+    justes: jeu.justes,
+    duree: Math.round((Date.now() - jeu.debut)/1000),
+    complete: !!complete
+  };
+  if(jeu.ligne){
+    // la série avait déjà été notée (appli mise en veille) : on complète la même ligne
+    ligne.date = jeu.ligne.date;
+    Object.assign(jeu.ligne, ligne);
+  }else{
+    jeu.ligne = ligne;
+    joueur.journal.unshift(ligne);
+  }
+  if(joueur.journal.length > 60) joueur.journal.length = 60;
+}
+
+function formatDuree(s){
+  if(s < 60) return s + " s";
+  const m = Math.floor(s/60), r = s % 60;
+  return m + " min" + (r ? " " + r + " s" : "");
+}
+function formatDate(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"}) +
+         " à " + d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+}
+
+function afficherJournal(){
+  const j = joueur.journal || [];
+  q("journal-sous").textContent = joueur.nom + " — une ligne par série jouée.";
+  q("journal-nb").textContent = j.length + " session" + (j.length>1?"s":"");
+  const liste = q("journal-liste");
+
+  if(!j.length){
+    q("journal-resume").innerHTML = "";
+    liste.innerHTML = '<div class="log-ligne" style="color:#5C7178">Aucune série jouée pour l\'instant.</div>';
+    return;
+  }
+  const temps = j.reduce((s,e)=>s+e.duree,0);
+  const questions = j.reduce((s,e)=>s+e.questions,0);
+  const justes = j.reduce((s,e)=>s+e.justes,0);
+  q("journal-resume").innerHTML =
+    '<div><div class="val">'+formatDuree(temps)+'</div><div class="lab">temps de jeu</div></div>'+
+    '<div><div class="val">'+(questions ? Math.round(justes/questions*100) : 0)+'%</div>'+
+    '<div class="lab">de réussite sur '+questions+' calculs</div></div>';
+
+  liste.innerHTML = j.map(e=>{
+    const p = PALIERS.find(x=>x.id===e.palier);
+    return '<div class="log-ligne">'+
+      '<div class="log-pts'+(e.points<0?' perte':'')+'">'+(e.points>0?"+":"")+e.points+'</div>'+
+      '<div class="log-detail"><b>'+(p?p.nom:e.palier)+
+        (e.kamikaze?' <span class="flamme">· kamikaze</span>':'')+'</b>'+
+        formatDate(e.date)+'<br>'+
+        formatDuree(e.duree)+' · '+e.justes+'/'+e.questions+' justes · total '+e.total+' pts'+
+        (e.complete?'':' · série arrêtée')+
+      '</div></div>';
+  }).join("");
+}
+q("voir-journal").onclick = ()=>{ afficherJournal(); ecran("ecran-journal"); };
+q("retour-depuis-journal").onclick = ()=>{ afficherPaliers(); ecran("ecran-paliers"); };
+
+/* ---------- bilan ---------- */
+async function finSerie(){
+  const avant = jeu.depart;
+  jeu.etat.series++;
+  const apres = Math.min(jeu.etat.points, OBJECTIF);
+  enregistrerSession(true);
+  await sauver();
+  ecrireFichier(); // sauvegarde fichier à chaque fin de série
+
+  const duree = jeu.journalDuree = formatDuree(Math.round((Date.now()-jeu.debut)/1000));
+  const atteint = apres >= OBJECTIF && avant < OBJECTIF;
+  q("bilan-titre").textContent = atteint
+    ? "1000 points ! Palier " + jeu.palier.nom.toLowerCase() + " réussi"
+    : (jeu.points < 0 ? "Série terminée — kamikaze" : "Série terminée");
+  q("bilan-points").innerHTML = (jeu.points > 0 ? "+" : "") + jeu.points +
+    "<small>" + (jeu.points < 0 ? "points perdus sur la série" : "points gagnés") + "</small>";
+  q("bilan-jauge").style.width = Math.round(apres/OBJECTIF*100) + "%";
+  q("bilan-total").innerHTML = "<b>"+apres+"</b> / 1000 points";
+  q("bilan-reste").textContent = (apres >= OBJECTIF ? "objectif atteint" : (OBJECTIF-apres)+" points à trouver") +
+    " · " + duree;
+  let texte = "";
+  if(jeu.rattrapees.length)
+    texte += "Rattrapées à la seconde chance : " + jeu.rattrapees.map(e=>"<span>"+e+"</span>").join("") + "<br>";
+  if(jeu.erreurs.length)
+    texte += "Elles reviendront à la prochaine série : " + jeu.erreurs.map(e=>"<span>"+e+"</span>").join("");
+  else if(!jeu.rattrapees.length)
+    texte = "Aucune erreur sur cette série.";
+  q("bilan-erreurs").innerHTML = texte;
+  ecran("ecran-bilan");
+}
+q("rejouer").onclick = ()=> demarrerSerie(jeu.palier.id);
+q("retour-paliers").onclick = ()=>{ afficherPaliers(); ecran("ecran-paliers"); };
+q("quitter-serie").onclick = async ()=>{
+  // les points sont déjà comptés question par question
+  enregistrerSession(false);
+  await sauver();
+  ecrireFichier();
+  afficherPaliers(); ecran("ecran-paliers");
+};
+
+// filet de sécurité : on réenregistre dès que l'appli passe en arrière-plan ou se ferme
+function filet(){
+  if(q("ecran-jeu").classList.contains("actif")) enregistrerSession(false);
+  sauver();
+  ecrireFichier(); // sauvegarde fichier à la fermeture
+}
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden) filet(); });
+window.addEventListener("pagehide", filet);
+window.addEventListener("beforeunload", filet);
+
+q("lier-fichier").onclick = lierFichier;
+q("exporter").onclick = exporterScores;
+q("importer").onclick = ()=> q("fichier-import").click();
+q("fichier-import").onchange = (e)=>{
+  if(e.target.files && e.target.files[0]) importerScores(e.target.files[0]);
+  e.target.value = "";
+};
+
+/* ---------- installation sur l'écran d'accueil + hors ligne ---------- */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
+let invite = null;
+window.addEventListener("beforeinstallprompt", (e)=>{
+  e.preventDefault();
+  invite = e;
+  const b = q("installer");
+  if(b) b.style.display = "block";
+});
+q("installer").onclick = async ()=>{
+  if(!invite) return;
+  invite.prompt();
+  await invite.userChoice;
+  invite = null;
+  q("installer").style.display = "none";
+};
+
+/* ---------- départ ---------- */
+(async function(){
+  construireClavier();
+  await initStockage();
+  await charger();
+  majEtatStockage(STOCKAGE.mode !== "memoire");
+  majInfoFichier(fichierPossible()
+    ? "Aucun fichier lié. Liez-en un une fois, placé à côté du HTML : ensuite tout s'enregistre dedans automatiquement."
+    : "Enregistrement automatique dans un fichier indisponible ici — utilisez Exporter.");
+  if(!fichierPossible()) q("lier-fichier").style.display = "none";
+  afficherJoueurs();
+  const j = DATA.joueurs.find(x=>x.id===DATA.dernier);
+  if(j){ joueur = j; afficherPaliers(); ecran("ecran-paliers"); }
+})();
+</script>
