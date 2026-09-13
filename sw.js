@@ -3,7 +3,7 @@
    Après une modification du jeu, changez le numéro de version ci-dessous :
    les appareils récupéreront la nouvelle version à la prochaine ouverture. */
 
-const VERSION = "mc-v3";
+const VERSION = "mc-v7";
 const FICHIERS = [
   "./",
   "./index.html",

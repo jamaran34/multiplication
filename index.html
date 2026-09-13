@@ -107,6 +107,11 @@
   .resume div{flex:1;background:var(--carte);border:1px solid var(--trait);border-radius:12px;padding:10px 12px}
   .resume .val{font-family:Georgia,serif;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
   .resume .lab{font-size:12px;color:#5C7178}
+  #canvas-arcade{
+    display:block;width:100%;border:1px solid var(--trait);border-radius:16px;
+    background:#12262E;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+  }
+  #verdict-arcade{text-align:center}
   .inter{
     width:48px;height:28px;border-radius:14px;background:var(--trait);
     position:relative;flex:none;transition:background .2s;display:block;
@@ -133,7 +138,8 @@
     color:var(--encre);
   }
   .reponse.vide{color:#B7C4C1}
-  .verdict{height:22px;margin-top:8px;font-size:14px;font-weight:600}
+  .reponse.solution{color:var(--or);border-bottom-color:var(--or)}
+  .verdict{min-height:38px;margin-top:12px;font-size:26px;line-height:1.2;font-weight:600}
   .verdict.ok{color:var(--juste)}
   .verdict.ko{color:var(--faux)}
   .secousse{animation:sec .3s}
@@ -212,6 +218,15 @@
         <span class="inter"><i></i></span>
       </div>
     </button>
+    <button class="carte" id="bascule-arcade" aria-pressed="false">
+      <div class="joueur-ligne">
+        <div>
+          <div class="titre">Mode astéroïdes</div>
+          <div class="detail">Vise la bonne réponse avant qu'elle t'écrase</div>
+        </div>
+        <span class="inter"><i></i></span>
+      </div>
+    </button>
     <div id="liste-paliers"></div>
     <button class="lien" id="voir-journal">Historique des sessions</button><br>
     <button class="lien" id="effacer-joueur">Effacer ce joueur et ses scores</button>
@@ -246,6 +261,16 @@
       <h3 id="titre-grille">Table de Pythagore</h3>
       <div class="pythagore" id="pythagore"></div>
     </div>
+  </section>
+
+  <!-- 3 bis. mode astéroïdes -->
+  <section id="ecran-arcade" class="ecran">
+    <div class="barre-haut">
+      <button class="quitter" id="quitter-arcade">← Arrêter</button>
+      <span class="compteur" id="compteur-arcade">—</span>
+    </div>
+    <canvas id="canvas-arcade"></canvas>
+    <div class="verdict" id="verdict-arcade"></div>
   </section>
 
   <!-- 4. bilan -->
@@ -485,6 +510,7 @@ q("nouveau-nom").addEventListener("keydown", e=>{ if(e.key==="Enter") q("ajouter
 function afficherPaliers(){
   q("titre-joueur").textContent = joueur.nom;
   q("bascule-mode").setAttribute("aria-pressed", joueur.kamikaze ? "true" : "false");
+  q("bascule-arcade").setAttribute("aria-pressed", joueur.arcade ? "true" : "false");
   document.body.classList.toggle("kamikaze", !!joueur.kamikaze);
   const box = q("liste-paliers");
   box.innerHTML = "";
@@ -505,6 +531,11 @@ function afficherPaliers(){
     box.appendChild(b);
   });
 }
+q("bascule-arcade").onclick = async ()=>{
+  joueur.arcade = !joueur.arcade;
+  q("bascule-arcade").setAttribute("aria-pressed", joueur.arcade ? "true" : "false");
+  await sauver();
+};
 q("bascule-mode").onclick = async ()=>{
   joueur.kamikaze = !joueur.kamikaze;
   q("bascule-mode").setAttribute("aria-pressed", joueur.kamikaze ? "true" : "false");
@@ -566,8 +597,10 @@ function demarrerSerie(palierId){
   melanger(questions);
   jeu = {palier:p, etat:etat, questions:questions, index:0, points:0, saisie:"",
          verrou:false, erreurs:[], rattrapees:[], reprises:{}, kamikaze:!!joueur.kamikaze,
+         arcade:!!joueur.arcade, crashes:0,
          depart:Math.min(etat.points, OBJECTIF), debut:Date.now(), justes:0, enregistre:false};
   document.body.classList.toggle("kamikaze", jeu.kamikaze);
+  if(jeu.arcade){ arcadeDemarrer(); return; }
   construireGrille();
   afficherQuestion();
   ecran("ecran-jeu");
@@ -607,6 +640,7 @@ function afficherQuestion(){
 
 function majSaisie(){
   const r = q("reponse");
+  r.classList.remove("solution");
   r.textContent = jeu.saisie === "" ? "?" : jeu.saisie;
   r.classList.toggle("vide", jeu.saisie === "");
 }
@@ -625,60 +659,79 @@ function crediter(n){
   jeu.etat.points = Math.max(0, jeu.etat.points + n);
 }
 
+/* Notation d'une réponse, commune au mode clavier et au mode astéroïdes.
+   Renvoie le message à afficher. */
+function noterReponse(o, juste){
+  const bon = o.a * o.b;
+  const cle = clefFait(o.a, o.b);
+  let msg;
+  if(juste){
+    jeu.points += bon;
+    jeu.justes++;
+    crediter(bon);
+    if(!jeu.etat.faits.includes(cle)) jeu.etat.faits.push(cle);
+    msg = "Juste : +" + bon + " points";
+    if(jeu.etat.aRevoir.includes(cle)){
+      jeu.etat.aRevoir = jeu.etat.aRevoir.filter(x=>x!==cle);
+      jeu.rattrapees.push(o.a+" × "+o.b);
+      jeu.erreurs = jeu.erreurs.filter(x=> x.indexOf(o.a+" × "+o.b+" =") !== 0);
+      msg = "Juste, cette fois : +" + bon + " points";
+    }
+  }else{
+    if(jeu.kamikaze){
+      jeu.points -= bon;
+      crediter(-bon);
+      msg = "Raté : −" + bon + " points";
+    }else{
+      msg = "C'était " + bon + " — on la reverra";
+    }
+    // une opération ne part dans « à revoir » qu'une fois, même si on se trompe plusieurs fois dessus
+    if(!o.rate){
+      o.rate = true;
+      if(!jeu.erreurs.includes(o.a+" × "+o.b+" = "+bon)) jeu.erreurs.push(o.a+" × "+o.b+" = "+bon);
+      if(!jeu.etat.aRevoir.includes(cle)) jeu.etat.aRevoir.push(cle);
+      jeu.reprises[cle] = (jeu.reprises[cle] || 0) + 1;
+      if(jeu.reprises[cle] <= 2){
+        const pos = Math.min(jeu.index + 3, jeu.questions.length);
+        jeu.questions.splice(pos, 0, {a:o.a, b:o.b, revue:true});
+      }
+    }
+  }
+  sauver(); // le total du palier est enregistré à chaque réponse
+  return msg;
+}
+
 function valider(){
   if(jeu.saisie === "") return;
   const o = jeu.questions[jeu.index];
   const bon = o.a * o.b;
   const rep = parseInt(jeu.saisie,10);
+  const juste = (rep === bon);
   const v = q("verdict");
   jeu.verrou = true;
-  if(rep === bon){
-    jeu.points += bon;
-    jeu.justes++;
-    crediter(bon);
-    v.textContent = "Juste : +" + bon + " points";
-    v.className = "verdict ok";
-    const cle = clefFait(o.a,o.b);
-    if(!jeu.etat.faits.includes(cle)) jeu.etat.faits.push(cle);
-    if(jeu.etat.aRevoir.includes(cle)){
-      jeu.etat.aRevoir = jeu.etat.aRevoir.filter(x=>x!==cle);
-      jeu.rattrapees.push(o.a+" × "+o.b);
-      jeu.erreurs = jeu.erreurs.filter(x=> x.indexOf(o.a+" × "+o.b+" =") !== 0);
-      v.textContent = "Juste, cette fois : +" + bon + " points";
-    }
+  v.textContent = noterReponse(o, juste);
+  v.className = "verdict " + (juste ? "ok" : "ko");
+  if(juste){
     const c = q("case-"+o.a+"-"+o.b);
     if(c && !c.classList.contains("acquis")){
       c.classList.add("acquis","neuf");
       setTimeout(()=>c.classList.remove("neuf"),350);
     }
   }else{
-    const cle = clefFait(o.a,o.b);
-    if(jeu.kamikaze){
-      jeu.points -= bon;
-      crediter(-bon);
-      v.textContent = "C'était " + bon + " — tu perds " + bon + " points";
-    }else{
-      v.textContent = "C'était " + bon + " — on la reverra";
-    }
-    v.className = "verdict ko";
-    if(!jeu.erreurs.includes(o.a+" × "+o.b+" = "+bon)) jeu.erreurs.push(o.a+" × "+o.b+" = "+bon);
-    if(!jeu.etat.aRevoir.includes(cle)) jeu.etat.aRevoir.push(cle);
-    // on la repropose un peu plus loin dans la série, deux fois au maximum
-    jeu.reprises[cle] = (jeu.reprises[cle] || 0) + 1;
-    if(jeu.reprises[cle] <= 2){
-      const pos = Math.min(jeu.index + 3, jeu.questions.length);
-      jeu.questions.splice(pos, 0, {a:o.a, b:o.b, revue:true});
-    }
+    // le bon résultat s'affiche en grand à la place de la réponse saisie
+    const r = q("reponse");
+    r.textContent = bon;
+    r.classList.remove("vide");
+    r.classList.add("solution");
     q("bloc-calcul").classList.add("secousse");
     setTimeout(()=>q("bloc-calcul").classList.remove("secousse"),300);
   }
-  sauver(); // le total du palier est enregistré à chaque question
   setTimeout(()=>{
     jeu.verrou = false;
     jeu.index++;
     if(jeu.index >= jeu.questions.length) finSerie();
     else afficherQuestion();
-  }, rep === bon ? 750 : 1500);
+  }, juste ? 750 : 2800);
 }
 
 function construireClavier(){
@@ -700,6 +753,345 @@ document.addEventListener("keydown", e=>{
   else if(e.key === "Enter") taper("ok");
 });
 
+/* ================= MODE ASTÉROÏDES =================
+   Une rangée d'astéroïdes descend, chacun porte un résultat possible.
+   Toucher le bon : la fusée se déplace, tire, l'astéroïde explose.
+   Se tromper : la rangée accélère (et coûte les points en mode kamikaze).
+   Se faire toucher : la série est perdue.
+==================================================== */
+const ARC = {
+  canvas:null, ctx:null, W:0, H:0,
+  roches:[], y:0, vitesse:0, etat:"attente",
+  fusee:{x:0, cible:0, vivante:true}, tir:null, eclats:[],
+  boucle:null, dernier:0, pause:false, message:"", messageFin:0
+};
+const ARC_DUREE = 13;     // secondes pour traverser l'écran, identique à tous les paliers
+const ARC_ACCEL = 1.18;   // accélération à chaque mauvaise réponse
+const ARC_NB = 5;         // astéroïdes par rangée
+const ARC_ESSAIS = 2;     // tentatives autorisées avant le crash
+const ARC_BONUS = 30;     // points offerts pour une série sans crash
+
+function arcadeDimensionner(){
+  const c = ARC.canvas;
+  const largeur = c.parentElement.clientWidth;
+  const hauteur = Math.max(410, Math.min(window.innerHeight - 118, 672));
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(largeur*dpr);
+  c.height = Math.round(hauteur*dpr);
+  c.style.height = hauteur + "px";
+  ARC.ctx.setTransform(dpr,0,0,dpr,0,0);
+  ARC.W = largeur; ARC.H = hauteur;
+  ARC.fusee.x = ARC.fusee.x || largeur/2;
+}
+
+/* --- faux résultats crédibles --- */
+function leurres(a, b, combien){
+  const bon = a*b;
+  const idees = [a*(b+1), a*(b-1), (a+1)*b, (a-1)*b, bon+a, bon-a, bon+b, bon-b, bon+10, bon-10, bon+1, bon-1];
+  const inverse = String(bon).length === 2 ? parseInt(String(bon)[1]+String(bon)[0],10) : null;
+  if(inverse) idees.push(inverse);
+  const vus = new Set([bon]);
+  const gardes = [];
+  melanger(idees).forEach(v=>{
+    if(v > 0 && v <= 120 && !vus.has(v)){ vus.add(v); gardes.push(v); }
+  });
+  while(gardes.length < combien){
+    const v = bon + (Math.random()<0.5?-1:1)*(2+Math.floor(Math.random()*12));
+    if(v > 0 && !vus.has(v)){ vus.add(v); gardes.push(v); }
+  }
+  return gardes.slice(0, combien);
+}
+
+function arcadeNouvelleRangee(){
+  const o = jeu.questions[jeu.index];
+  const bon = o.a * o.b;
+  const valeurs = melanger([bon].concat(leurres(o.a, o.b, ARC_NB-1)));
+  const cellule = ARC.W / ARC_NB;
+  const rayon = Math.min(cellule*0.42, 40);
+  ARC.roches = valeurs.map((v,i)=>({
+    x: cellule*(i+0.5),
+    valeur: v,
+    bon: v === bon,
+    rayon: rayon,
+    forme: Array.from({length:11}, ()=> 0.84 + Math.random()*0.22),
+    tourne: Math.random()*Math.PI
+  }));
+  ARC.y = -rayon;
+  const distance = (ARC.H - 86) - ARC.y;
+  ARC.vitesse = distance / ARC_DUREE;
+  ARC.etat = "descente";
+  ARC.tir = null;
+  ARC.essais = 0;              // deux tentatives par multiplication
+  ARC.solution = null;
+  ARC.fusee.vivante = true;
+  majCompteurArcade();
+}
+
+function majCompteurArcade(){
+  q("compteur-arcade").textContent = "Question "+(jeu.index+1)+" / "+jeu.questions.length+
+    " · "+(jeu.points > 0 ? "+" : "")+jeu.points+" pts";
+}
+
+function arcadeMessage(texte, classe){
+  const v = q("verdict-arcade");
+  v.textContent = texte;
+  v.className = "verdict " + (classe || "");
+}
+
+/* --- interaction --- */
+function arcadeToucher(ev){
+  if(ARC.etat !== "descente") return;
+  const r = ARC.canvas.getBoundingClientRect();
+  const p = ev.touches ? ev.touches[0] : ev;
+  const x = p.clientX - r.left, y = p.clientY - r.top;
+  const cible = ARC.roches.find(o=> Math.hypot(x-o.x, y-ARC.y) < o.rayon*1.2);
+  if(!cible) return;
+  ev.preventDefault();
+  const question = jeu.questions[jeu.index];
+  if(cible.bon){
+    ARC.etat = "tir";
+    ARC.fusee.cible = cible.x;
+    ARC.viseur = cible;
+    arcadeMessage("", "");
+  }else{
+    // mauvaise réponse : la rangée accélère, et en kamikaze les points partent
+    cible.rate = true;
+    ARC.essais++;
+    const msg = noterReponse(question, false);
+    majCompteurArcade();
+    if(ARC.essais >= ARC_ESSAIS){
+      arcadeChute();           // deuxième raté : la rangée fonce, le crash est inévitable
+      arcadeMessage(jeu.kamikaze ? msg : "Deux ratés — la rangée fonce", "ko");
+    }else{
+      ARC.vitesse *= ARC_ACCEL;
+      arcadeMessage(jeu.kamikaze ? msg : "Raté — plus qu'un essai", "ko");
+    }
+  }
+}
+
+function arcadeReussite(){
+  const question = jeu.questions[jeu.index];
+  arcadeMessage(noterReponse(question, true), "ok");
+  majCompteurArcade();
+  jeu.index++;
+  if(jeu.index >= jeu.questions.length){
+    ARC.etat = "fini";
+    setTimeout(()=> finSerie(), 700);
+  }else{
+    setTimeout(()=>{ if(ARC.etat === "explosion") arcadeNouvelleRangee(); }, 450);
+  }
+}
+
+function arcadeChute(){
+  // la rangée pique droit sur la fusée
+  const limite = ARC.H - 64;
+  ARC.etat = "chute";
+  ARC.vitesse = Math.max(ARC.vitesse, (limite - ARC.y) / 0.55);
+}
+
+function arcadeCrash(){
+  ARC.etat = "crash";
+  ARC.fusee.vivante = false;
+  for(let i=0;i<26;i++) ajouterEclat(ARC.fusee.x, ARC.H-40, 1.3);
+  const question = jeu.questions[jeu.index];
+  jeu.crashes++;
+  // si le temps s'est écoulé sans aucune tentative, la multiplication compte comme ratée
+  if(!question.rate) noterReponse(question, false);
+  ARC.solution = {texte: question.a + " × " + question.b + " = " + (question.a*question.b),
+                  fin: performance.now() + 2600};
+  arcadeMessage("Fusée touchée", "ko");
+  majCompteurArcade();
+  setTimeout(arcadeSuivante, 2600);
+}
+
+function arcadeSuivante(){
+  jeu.index++;
+  if(jeu.index >= jeu.questions.length){
+    ARC.etat = "fini";
+    finSerie();
+  }else{
+    ARC.fusee.x = ARC.W/2;
+    ARC.eclats = [];
+    arcadeNouvelleRangee();
+    arcadeMessage("Nouvelle fusée", "");
+  }
+}
+
+function ajouterEclat(x, y, force){
+  const a = Math.random()*Math.PI*2, v = (60 + Math.random()*220)*(force||1);
+  ARC.eclats.push({x:x, y:y, vx:Math.cos(a)*v, vy:Math.sin(a)*v, vie:1,
+    taille:2+Math.random()*4, couleur: Math.random()<0.5 ? "#C98A16" : "#E23D3D"});
+}
+
+/* --- dessin --- */
+function dessinerAsteroide(c, x, y, o){
+  c.save(); c.translate(x,y); c.rotate(o.tourne);
+  c.beginPath();
+  o.forme.forEach((f,i)=>{
+    const a = 2*Math.PI*i/o.forme.length;
+    const px = Math.cos(a)*o.rayon*f, py = Math.sin(a)*o.rayon*f;
+    i ? c.lineTo(px,py) : c.moveTo(px,py);
+  });
+  c.closePath();
+  c.fillStyle = o.rate ? "#6E5F4C" : "#96836C";
+  c.fill();
+  c.lineWidth = o.rayon*0.12; c.strokeStyle = "#705F4C"; c.stroke();
+  c.restore();
+  c.fillStyle = "#17323B";
+  c.font = "bold " + Math.round(o.rayon*0.95) + "px Georgia, serif";
+  c.textAlign = "center"; c.textBaseline = "middle";
+  c.fillText(o.valeur, x, y+1);
+}
+
+function dessinerFusee(c, x, y, taille){
+  const L = taille, l = taille*0.32;
+  c.save(); c.translate(x,y);
+  // flamme
+  c.fillStyle = "#E23D3D";
+  c.beginPath(); c.moveTo(-l*0.42, 0); c.lineTo(0, L*0.85); c.lineTo(l*0.42, 0); c.fill();
+  c.fillStyle = "#EFB61F";
+  c.beginPath(); c.moveTo(-l*0.22, 0); c.lineTo(0, L*0.52); c.lineTo(l*0.22, 0); c.fill();
+  // ailerons
+  c.fillStyle = "#E23D3D";
+  c.beginPath(); c.moveTo(-l*0.45,-L*0.20); c.lineTo(-l*1.0, L*0.10); c.lineTo(-l*0.45, L*0.02); c.fill();
+  c.beginPath(); c.moveTo( l*0.45,-L*0.20); c.lineTo( l*1.0, L*0.10); c.lineTo( l*0.45, L*0.02); c.fill();
+  // corps
+  c.fillStyle = "#F7F9F8";
+  c.beginPath();
+  c.moveTo(0,-L); c.lineTo(l*0.48,-L*0.42); c.lineTo(l*0.48, 0);
+  c.lineTo(-l*0.48, 0); c.lineTo(-l*0.48,-L*0.42); c.closePath(); c.fill();
+  c.fillStyle = "#E23D3D";
+  c.fillRect(-l*0.48, -L*0.42, l*0.96, L*0.10);
+  c.fillStyle = "#17323B";
+  c.beginPath(); c.arc(0, -L*0.22, l*0.26, 0, Math.PI*2); c.fill();
+  c.restore();
+}
+
+function arcadeDessiner(){
+  const c = ARC.ctx;
+  c.clearRect(0,0,ARC.W,ARC.H);
+  // étoiles
+  c.fillStyle = "#2A4650";
+  ARC.etoiles.forEach(e=> c.fillRect(e.x, e.y, e.t, e.t));
+  // au milieu : la multiplication en fond, ou le bon résultat après un crash
+  const o = jeu.questions[jeu.index];
+  const sol = (ARC.solution && performance.now() < ARC.solution.fin) ? ARC.solution : null;
+  if(sol){
+    c.save();
+    c.fillStyle = "#EFB61F";
+    c.font = "bold " + Math.round(Math.min(ARC.W*0.14, 48)) + "px Georgia, serif";
+    c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillText(sol.texte, ARC.W/2, ARC.H*0.52);
+    c.restore();
+  }else if(o && ARC.etat !== "fini"){
+    c.save();
+    c.globalAlpha = 0.30;
+    c.fillStyle = "#EFF3F1";
+    c.font = "bold " + Math.round(Math.min(ARC.W*0.17, 58)) + "px Georgia, serif";
+    c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillText(o.a + " × " + o.b, ARC.W/2, ARC.H*0.52);
+    c.restore();
+  }
+  // astéroïdes
+  if(ARC.etat !== "fini") ARC.roches.forEach(r=> dessinerAsteroide(c, r.x, ARC.y, r));
+  // tir
+  if(ARC.tir){
+    c.strokeStyle = "#EFB61F"; c.lineWidth = 4; c.lineCap = "round";
+    c.beginPath(); c.moveTo(ARC.tir.x, ARC.tir.y); c.lineTo(ARC.tir.x, ARC.tir.y+16); c.stroke();
+  }
+  // éclats
+  ARC.eclats.forEach(p=>{
+    c.globalAlpha = Math.max(p.vie,0);
+    c.fillStyle = p.couleur;
+    c.fillRect(p.x, p.y, p.taille, p.taille);
+    c.globalAlpha = 1;
+  });
+  // fusée
+  if(ARC.fusee.vivante) dessinerFusee(c, ARC.fusee.x, ARC.H-24, 46);
+}
+
+/* --- boucle --- */
+function arcadeAvancer(dt){
+  if(ARC.etat === "descente" || ARC.etat === "chute"){
+    ARC.y += ARC.vitesse*dt;
+    ARC.roches.forEach(r=> r.tourne += dt*0.25);
+    const limite = ARC.H - 64;
+    if(ARC.y + ARC.roches[0].rayon >= limite) arcadeCrash();
+  }
+  else if(ARC.etat === "tir"){
+    const dx = ARC.fusee.cible - ARC.fusee.x;
+    const pas = 900*dt;
+    if(Math.abs(dx) <= pas){
+      ARC.fusee.x = ARC.fusee.cible;
+      if(!ARC.tir) ARC.tir = {x:ARC.fusee.x, y:ARC.H-70};
+    }else{
+      ARC.fusee.x += Math.sign(dx)*pas;
+    }
+    if(ARC.tir){
+      ARC.tir.y -= 1100*dt;
+      if(ARC.tir.y <= ARC.y){
+        for(let i=0;i<20;i++) ajouterEclat(ARC.viseur.x, ARC.y, 1);
+        ARC.roches = ARC.roches.filter(r=> !r.bon);
+        ARC.tir = null;
+        ARC.etat = "explosion";
+        arcadeReussite();
+      }
+    }
+  }
+  else if(ARC.etat === "explosion"){
+    ARC.y += ARC.vitesse*dt*0.35;
+  }
+  // éclats
+  ARC.eclats.forEach(p=>{
+    p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 420*dt; p.vie -= dt*1.5;
+  });
+  ARC.eclats = ARC.eclats.filter(p=> p.vie > 0);
+}
+
+function arcadeTour(ts){
+  if(!ARC.actif) return;
+  if(ARC.pause){ ARC.dernier = ts; ARC.boucle = requestAnimationFrame(arcadeTour); return; }
+  const dt = Math.min((ts - ARC.dernier)/1000, 0.05); // borne : pas de saut après une veille
+  ARC.dernier = ts;
+  arcadeAvancer(dt);
+  arcadeDessiner();
+  ARC.boucle = requestAnimationFrame(arcadeTour);
+}
+
+function arcadeDemarrer(){
+  ARC.canvas = q("canvas-arcade");
+  ARC.ctx = ARC.canvas.getContext("2d");
+  ARC.actif = true; ARC.pause = false;
+  ARC.fusee = {x:0, cible:0, vivante:true};
+  ARC.eclats = []; ARC.tir = null;
+  ecran("ecran-arcade");
+  arcadeDimensionner();
+  ARC.fusee.x = ARC.W/2;
+  ARC.etoiles = Array.from({length:34}, ()=>({
+    x:Math.random()*ARC.W, y:Math.random()*ARC.H, t:1+Math.round(Math.random()*2)
+  }));
+  arcadeMessage("Touche le bon résultat", "");
+  arcadeNouvelleRangee();
+  ARC.dernier = performance.now();
+  ARC.boucle = requestAnimationFrame(arcadeTour);
+}
+
+function arcadeArreter(){
+  ARC.actif = false;
+  if(ARC.boucle) cancelAnimationFrame(ARC.boucle);
+  ARC.boucle = null;
+}
+
+q("canvas-arcade").addEventListener("pointerdown", arcadeToucher);
+window.addEventListener("resize", ()=>{ if(ARC.actif) arcadeDimensionner(); });
+q("quitter-arcade").onclick = async ()=>{
+  arcadeArreter();
+  enregistrerSession(false);
+  await sauver();
+  ecrireFichier();
+  afficherPaliers(); ecran("ecran-paliers");
+};
+
 /* ---------- journal des sessions ---------- */
 function enregistrerSession(complete){
   if(!jeu) return;
@@ -709,6 +1101,8 @@ function enregistrerSession(complete){
     date: new Date().toISOString(),
     palier: jeu.palier.id,
     kamikaze: jeu.kamikaze,
+    arcade: !!jeu.arcade,
+    crashes: jeu.crashes || 0,
     points: jeu.points,
     total: Math.min(jeu.etat.points, OBJECTIF),
     questions: jeu.index,
@@ -762,9 +1156,11 @@ function afficherJournal(){
     return '<div class="log-ligne">'+
       '<div class="log-pts'+(e.points<0?' perte':'')+'">'+(e.points>0?"+":"")+e.points+'</div>'+
       '<div class="log-detail"><b>'+(p?p.nom:e.palier)+
+        (e.arcade?' · astéroïdes':'')+
         (e.kamikaze?' <span class="flamme">· kamikaze</span>':'')+'</b>'+
         formatDate(e.date)+'<br>'+
         formatDuree(e.duree)+' · '+e.justes+'/'+e.questions+' justes · total '+e.total+' pts'+
+        (e.arcade && e.crashes ? ' · '+e.crashes+' crash'+(e.crashes>1?'s':'') : '')+
         (e.complete?'':' · série arrêtée')+
       '</div></div>';
   }).join("");
@@ -774,6 +1170,10 @@ q("retour-depuis-journal").onclick = ()=>{ afficherPaliers(); ecran("ecran-palie
 
 /* ---------- bilan ---------- */
 async function finSerie(){
+  arcadeArreter();
+  // série d'astéroïdes menée à son terme sans crash : bonus
+  jeu.bonus = (jeu.arcade && !jeu.crashes && jeu.index >= jeu.questions.length) ? ARC_BONUS : 0;
+  if(jeu.bonus){ jeu.points += jeu.bonus; crediter(jeu.bonus); }
   const avant = jeu.depart;
   jeu.etat.series++;
   const apres = Math.min(jeu.etat.points, OBJECTIF);
@@ -785,7 +1185,8 @@ async function finSerie(){
   const atteint = apres >= OBJECTIF && avant < OBJECTIF;
   q("bilan-titre").textContent = atteint
     ? "1000 points ! Palier " + jeu.palier.nom.toLowerCase() + " réussi"
-    : (jeu.points < 0 ? "Série terminée — kamikaze" : "Série terminée");
+    : (jeu.bonus ? "Série sans crash !"
+       : jeu.points < 0 ? "Série terminée — kamikaze" : "Série terminée");
   q("bilan-points").innerHTML = (jeu.points > 0 ? "+" : "") + jeu.points +
     "<small>" + (jeu.points < 0 ? "points perdus sur la série" : "points gagnés") + "</small>";
   q("bilan-jauge").style.width = Math.round(apres/OBJECTIF*100) + "%";
@@ -793,6 +1194,11 @@ async function finSerie(){
   q("bilan-reste").textContent = (apres >= OBJECTIF ? "objectif atteint" : (OBJECTIF-apres)+" points à trouver") +
     " · " + duree;
   let texte = "";
+  if(jeu.arcade){
+    texte += (jeu.bonus
+      ? "Aucun crash : <b>+" + jeu.bonus + " points</b> de bonus.<br>"
+      : jeu.crashes + " crash" + (jeu.crashes>1?"s":"") + " sur la série.<br>");
+  }
   if(jeu.rattrapees.length)
     texte += "Rattrapées à la seconde chance : " + jeu.rattrapees.map(e=>"<span>"+e+"</span>").join("") + "<br>";
   if(jeu.erreurs.length)
@@ -803,7 +1209,7 @@ async function finSerie(){
   ecran("ecran-bilan");
 }
 q("rejouer").onclick = ()=> demarrerSerie(jeu.palier.id);
-q("retour-paliers").onclick = ()=>{ afficherPaliers(); ecran("ecran-paliers"); };
+q("retour-paliers").onclick = ()=>{ arcadeArreter(); afficherPaliers(); ecran("ecran-paliers"); };
 q("quitter-serie").onclick = async ()=>{
   // les points sont déjà comptés question par question
   enregistrerSession(false);
@@ -814,11 +1220,15 @@ q("quitter-serie").onclick = async ()=>{
 
 // filet de sécurité : on réenregistre dès que l'appli passe en arrière-plan ou se ferme
 function filet(){
-  if(q("ecran-jeu").classList.contains("actif")) enregistrerSession(false);
+  if(q("ecran-jeu").classList.contains("actif") || q("ecran-arcade").classList.contains("actif"))
+    enregistrerSession(false);
   sauver();
   ecrireFichier(); // sauvegarde fichier à la fermeture
 }
-document.addEventListener("visibilitychange", ()=>{ if(document.hidden) filet(); });
+document.addEventListener("visibilitychange", ()=>{
+  ARC.pause = document.hidden;              // la rangée s'arrête si on quitte l'appli
+  if(document.hidden) filet();
+});
 window.addEventListener("pagehide", filet);
 window.addEventListener("beforeunload", filet);
 
